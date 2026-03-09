@@ -9,7 +9,7 @@ load_dotenv()
 class Config(BaseSettings):
     # Seurity & Fundamental
     SECRET_KEY: str = str(os.environ.get('SECRET_KEY'))
-    DEBUG: bool = bool(os.environ.get('DEBUG', True))
+    DEBUG: bool = bool(os.environ.get('DEBUG', False))
     GEMINI_API_KEY: str = str(os.environ.get('GEMINI_API_KEY'))
     MAYAR_BASE_URL: str =  "https://api.mayar.club/hl/v1"
     MAYAR_API_KEY: str = str(os.environ.get("MAYAR_API_KEY"))
@@ -22,7 +22,6 @@ class Config(BaseSettings):
     API_KEY_BREVO: str = str(os.environ.get("API_KEY_BREVO")) 
     
     # DB Connection
-    POSTGRES_DB: str = str(os.environ.get('POSTGRES_DB'))
     POSTGRES_URI: str = str(os.environ.get("POSTGRES_URI"))
     
     # Redis Broker & Result

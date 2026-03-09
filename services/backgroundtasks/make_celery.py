@@ -11,7 +11,7 @@ app.conf.update(
     result_backend=REDIS_URL,
     task_serializer='msgpack',
     result_serializer='msgpack',
-    accept_content=['msgpack', 'pickle', 'json'],
+    accept_content=['msgpack','json'],
     worker_prefetch_multiplier=1,      
     task_acks_late=True,              
     task_reject_on_worker_lost=True,

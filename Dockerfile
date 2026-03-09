@@ -25,6 +25,6 @@ COPY . .
 
 ENV VIRTUAL_ENV=/app/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-EXPOSE 8080
+EXPOSE 8000
 
-CMD ["gunicorn", "-k", "gevent", "--bind", ":8080", "--workers", "2", "run:app"]
+CMD ["gunicorn", "-k", "gevent", "--bind", ":8000", "--workers", "2", "run:app"]

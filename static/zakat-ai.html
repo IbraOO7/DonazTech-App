@@ -1,0 +1,187 @@
+<style>
+    #map { height: 100%; width: 100%; }
+    .map-overlay { background: #f9fafb; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #9ca3af; transition: opacity 0.3s; }
+    .spinner { animation: spin 1s linear infinite; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .inline-block { white-space: pre-wrap; line-height: 1.6; }
+    /* Custom Marker Style */
+    .zakat-marker { font-size: 24px; color: #16a34a; filter: drop-shadow(0 0 2px rgba(0,0,0,0.3)); }
+</style>
+
+<div class="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div class="flex flex-col h-[600px]">
+        <div class="mb-6">
+            <h2 class="text-3xl font-bold text-gray-800"><i class="fas fa-robot text-green-600 mr-2"></i> DonazTech AI</h2>
+            <p class="text-gray-600">Konsultasi zakat berbasis AI dengan rekomendasi lokasi.</p>
+        </div>
+
+        <div id="chat-container" class="flex-1 overflow-y-auto p-4 bg-gray-50 rounded-2xl border border-gray-200 shadow-inner space-y-4">
+            <div class="text-center text-gray-400 text-sm italic">Mulai percakapan dengan menanyakan zakat...</div>
+        </div>
+
+        <div class="mt-4 bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
+            <textarea id="query" rows="2" class="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 outline-none transition" placeholder="Contoh: Berapa zakat mal untuk tabungan 100jt?"></textarea>
+            <div class="flex gap-2 mt-3">
+                <button id="submit-btn" onclick="askAI()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition shadow-md">Tanya AI</button>
+                <button id="loc-btn" onclick="getRecommendationWithLocation()" class="px-4 py-3 bg-white border border-green-600 text-green-600 rounded-xl hover:bg-green-50 transition">
+                    <i class="fas fa-map-marker-alt"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="h-[600px] w-full rounded-3xl overflow-hidden border border-gray-200 shadow-xl relative">
+        <div id="map-overlay" class="map-overlay">
+            <div id="map-status" class="text-center">
+                <i id="map-spinner" class="fas fa-circle-notch spinner text-4xl text-green-600 mb-2 hidden"></i>
+                <p id="map-text">Peta akan muncul setelah lokasi terdeteksi</p>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
+</div>
+
+<script>
+    // 1. Konfigurasi Ikon & Map
+    const zakatIcon = L.divIcon({
+        html: '<div class="text-green-600 text-2xl drop-shadow-md"><i class="fas fa-moon"></i></div>',
+        className: 'custom-zakat-icon',
+        iconSize: [30, 30],
+        iconAnchor: [15, 30]
+    });
+
+    const ZakatMap = (() => {
+        let mapInstance = null;
+        let markerLayer = null;
+
+        const init = (lat, lng) => {
+            document.getElementById('map-overlay').style.display = 'none';
+            if (!mapInstance) {
+                mapInstance = L.map('map').setView([lat, lng], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapInstance);
+                markerLayer = L.layerGroup().addTo(mapInstance);
+                window.zakatMapInstance = mapInstance;
+            } else {
+                mapInstance.setView([lat, lng], 13);
+            }
+        };
+
+        const updateMarkers = (locations) => {
+            if (!markerLayer) return;
+            markerLayer.clearLayers();
+            locations.forEach(loc => {
+                if (loc.lat && loc.lng) {
+                    const marker = L.marker([loc.lat, loc.lng], { icon: zakatIcon }).addTo(markerLayer);
+                    // Tooltip permanen untuk Nama & Jarak di atas marker
+                    marker.bindTooltip(`<b>${loc.name}</b><br>${loc.distance || 0} km`, {
+                        permanent: true, direction: 'top', className: 'bg-white px-2 py-1 rounded shadow-md text-[10px] border border-green-200'
+                    });
+                    marker.bindPopup(`<b>${loc.name}</b><br>Jarak: ${loc.distance || 0} km`);
+                }
+            });
+            if (locations.length > 0) mapInstance.setView([locations[0].lat, locations[0].lng], 14);
+        };
+
+        return { init, updateMarkers };
+    })();
+
+    // 2. Helper UI
+    function addMessage(text, isUser = false, isError = false) {
+        const container = document.getElementById('chat-container');
+        if (!container) return;
+        const div = document.createElement('div');
+        div.className = `${isUser ? 'text-right' : 'text-left'} mb-2`;
+        div.innerHTML = `<div class="inline-block ${isUser ? 'bg-green-100 text-green-900' : (isError ? 'bg-red-50 text-red-800' : 'bg-white text-gray-800')} border border-gray-200 px-4 py-2 rounded-2xl shadow-sm text-sm">${isError ? '<i class="fas fa-exclamation-circle mr-2"></i>' : ''}${text}</div>`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+        return div.querySelector('.inline-block');
+    }
+
+    function updateLastMessage(text) {
+        const container = document.getElementById('chat-container');
+        const lastMsg = container?.lastElementChild?.querySelector('.inline-block');
+        if (lastMsg) {
+            let formattedText = text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/<br>\* /g, '<br>• ');
+            lastMsg.innerHTML = formattedText;
+        }
+    }
+
+    // 3. Fungsi Utama (Global Scope)
+    window.getRecommendationWithLocation = async () => {
+        const btn = document.getElementById('loc-btn');
+        btn.disabled = true;
+        if (!navigator.geolocation) { addMessage("Geolocation tidak didukung.", false, true); btn.disabled = false; return; }
+        
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            const { latitude, longitude } = pos.coords;
+            ZakatMap.init(latitude, longitude);
+            try {
+                const res = await fetch('/v1/charity/match', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ lat: latitude, lng: longitude, query: "Cari yayasan" })
+                });
+                const data = await res.json();
+                if (data.results?.length > 0) { ZakatMap.updateMarkers(data.results); addMessage(`Ditemukan ${data.results.length} yayasan.`); }
+                else { addMessage("Tidak ada yayasan dalam radius 10km."); }
+            } catch (e) { addMessage("Gagal mengambil data.", false, true); } finally { btn.disabled = false; }
+        }, () => { addMessage("Izin lokasi ditolak.", false, true); btn.disabled = false; });
+    };
+
+    window.askAI = async () => {
+        const input = document.getElementById('query');
+        const userQuery = input?.value.trim();
+        if (!userQuery) return;
+
+        addMessage(userQuery, true);
+        input.value = '';
+        
+        try {
+            const res = await fetch('/v1/zakat/consult', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: userQuery, lat: -6.3731, lng: 106.8347 })
+            });
+            
+            // Handle 429 Interaktif
+            if (res.status === 429) {
+                addMessage("Sesi Token AI telah habis, silakan kembali dalam 24 jam.", false, true);
+                return;
+            }
+
+            const data = await res.json();
+            addMessage('<em>AI sedang menghitung zakat...</em>');
+            await pollStatus(data.id);
+        } catch (err) { addMessage("Kesalahan server.", false, true); }
+    };
+
+    async function pollStatus(id) {
+        for (let i = 0; i < 20; i++) {
+            try {
+                const res = await fetch(`/v1/zakat/status/${id}`);
+                const statusData = await res.json();
+                if (statusData.response === "LIMIT_EXCEEDED") {
+                    addMessage("Sesi Token AI telah habis, silakan kembali dalam 24 jam.", false, true);
+                    return;
+                }
+                if (statusData.status === 'completed') {
+                    updateLastMessage(statusData.response);
+                    if (statusData.locations?.length > 0) {
+                        ZakatMap.updateMarkers(statusData.locations);
+                    }
+                    return;
+                }
+            } catch (err) {
+                console.error("Error polling status:", err);
+            }
+            await new Promise(r => setTimeout(r, 2000));
+        }
+        addMessage("Proses terlalu lama, silakan coba lagi nanti.", false, true);
+    }
+
+    window.onload = () => {
+        ZakatMap.init(-6.3731, 106.8347);
+        document.getElementById('submit-btn').addEventListener('click', window.askAI);
+        document.getElementById('loc-btn').addEventListener('click', window.getRecommendationWithLocation);
+    };
+</script>

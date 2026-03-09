@@ -1,0 +1,160 @@
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="max-w-6xl mx-auto py-4">
+    <div class="mb-8">
+        <h2 class="text-3xl font-extrabold text-gray-800">Dashboard Donatur</h2>
+        <p class="text-gray-500">Ringkasan aktivitas donasi dan riwayat zakat Anda.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div class="p-4 bg-green-100 text-green-600 rounded-xl"><i class="fas fa-wallet text-2xl"></i></div>
+            <div>
+                <p class="text-gray-500 text-sm">Total Donasi</p>
+                <h3 class="text-2xl font-bold" id="total-amount">Rp 0</h3>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div class="p-4 bg-blue-100 text-blue-600 rounded-xl"><i class="fas fa-check-circle text-2xl"></i></div>
+            <div>
+                <p class="text-gray-500 text-sm">Transaksi Berhasil</p>
+                <h3 class="text-2xl font-bold" id="total-success">0</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8 h-[300px]">
+        <canvas id="donationChart"></canvas>
+    </div>
+
+    <div class="bg-white shadow-lg rounded-2xl overflow-hidden border border-gray-100">
+        <div class="p-6 border-b border-gray-100 font-bold text-gray-700">Riwayat Transaksi</div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Tanggal</th>
+                        <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Kategori</th>
+                        <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Nominal</th>
+                        <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body" class="divide-y divide-gray-100">
+                    <tr><td colspan="4" class="px-6 py-4 text-center text-gray-400">Memuat data...</td></tr>
+                </tbody>
+            </table>
+            <div id="pagination-controls" class="flex justify-center items-center gap-4 py-4">
+                <button id="prev-btn" class="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50">Sebelumnya</button>
+                <span id="page-info" class="text-sm text-gray-600">Halaman 1</span>
+                <button id="next-btn" class="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50">Selanjutnya</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // Variabel global
+        let donationChart = null;
+        let currentPage = 1;
+        const itemsPerPage = 10;
+        let allData = []; // Menyimpan semua data untuk keperluan pagination
+
+        async function renderTable() {
+            const tbody = document.getElementById('history-body');
+            
+            // Kalkulasi data untuk halaman saat ini
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const pageData = allData.slice(start, end);
+
+            if (allData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-gray-500">Belum ada riwayat donasi.</td></tr>';
+            } else {
+                tbody.innerHTML = pageData.map(item => `
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="px-6 py-4 text-sm text-gray-600">${item.date}</td>
+                        <td class="px-6 py-4 text-sm font-medium text-gray-900">${item.category}</td>
+                        <td class="px-6 py-4 text-sm font-bold text-green-600">Rp ${Number(item.amount).toLocaleString()}</td>
+                        <td class="px-6 py-4">
+                            <span class="px-3 py-1 rounded-full text-[10px] font-bold ${item.status === 'SUCCESS' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">
+                                ${item.status}
+                            </span>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+
+            // Update informasi halaman dan tombol
+            document.getElementById('page-info').innerText = `Halaman ${currentPage}`;
+            document.getElementById('prev-btn').disabled = currentPage === 1;
+            document.getElementById('next-btn').disabled = end >= allData.length;
+        }
+
+        async function loadDashboard() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.hash = 'home';
+                return;
+            }
+
+            try {
+                const res = await fetch('/v1/donate/history', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (res.status === 401) {
+                    localStorage.removeItem('token');
+                    window.location.hash = 'home';
+                    return;
+                }
+
+                allData = await res.json(); // Simpan data ke variabel global
+
+                if (!Array.isArray(allData)) throw new Error("Format data tidak valid");
+
+                // Update Stats (Tetap menggunakan data penuh, bukan hasil slice)
+                const total = allData.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                document.getElementById('total-amount').innerText = `Rp ${total.toLocaleString()}`;
+                document.getElementById('total-success').innerText = allData.filter(i => i.status === 'SUCCESS').length;
+
+                // Render Table (Halaman Pertama)
+                renderTable();
+
+                // Render Chart
+                const ctx = document.getElementById('donationChart').getContext('2d');
+                if (donationChart) donationChart.destroy();
+                
+                donationChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: allData.map(i => i.date),
+                        datasets: [{ 
+                            label: 'Nominal (Rp)', 
+                            data: allData.map(i => i.amount), 
+                            borderColor: '#16a34a', 
+                            backgroundColor: 'rgba(22, 163, 74, 0.1)', 
+                            fill: true, 
+                            tension: 0.4 
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+            } catch (err) { 
+                console.error("Gagal memuat dashboard:", err);
+                document.getElementById('history-body').innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-red-500">Gagal memuat data.</td></tr>';
+            }
+        }
+
+        // Event Listener untuk Pagination
+        document.getElementById('prev-btn').addEventListener('click', () => {
+            if (currentPage > 1) { currentPage--; renderTable(); }
+        });
+        document.getElementById('next-btn').addEventListener('click', () => {
+            if ((currentPage * itemsPerPage) < allData.length) { currentPage++; renderTable(); }
+        });
+
+        loadDashboard();
+    })();
+</script>

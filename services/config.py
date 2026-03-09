@@ -9,7 +9,7 @@ load_dotenv()
 class Config(BaseSettings):
     # Seurity & Fundamental
     SECRET_KEY: str = str(os.environ.get('SECRET_KEY'))
-    DEBUG: bool = bool(os.environ.get('DEBUG', False))
+    DEBUG: bool = False
     GEMINI_API_KEY: str = str(os.environ.get('GEMINI_API_KEY'))
     MAYAR_BASE_URL: str =  "https://api.mayar.club/hl/v1"
     MAYAR_API_KEY: str = str(os.environ.get("MAYAR_API_KEY"))

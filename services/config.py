@@ -22,17 +22,11 @@ class Config(BaseSettings):
     API_KEY_BREVO: str = str(os.environ.get("API_KEY_BREVO")) 
     
     # DB Connection
-    POSTGRES_USERNAME: str = str(os.environ.get('POSTGRES_USERNAME'))
-    POSTGRES_PASSWORD: str = str(os.environ.get('POSTGRES_PASSWORD'))
-    POSTGRES_HOST: str = str(os.environ.get('POSTGRES_HOST'))
-    POSTGRES_PORT: int = int(os.environ.get('POSTGRES_PORT', 5432))
     POSTGRES_DB: str = str(os.environ.get('POSTGRES_DB'))
-    if not all([POSTGRES_USERNAME, POSTGRES_PASSWORD, POSTGRES_DB]):
-        raise ValueError("Variabel database belum terisi lengkap di file .env!")
-    POSTGRES_URI: str = f"postgresql+psycopg://{POSTGRES_USERNAME}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+    POSTGRES_URI: str = str(os.environ.get("POSTGRES_URI"))
     
     # Redis Broker & Result
-    REDIS_URI: str = "redis://localhost:6379/0"
+    REDIS_URI: str = str(os.environ.get("REDIS_URI"))
     
     model_config = SettingsConfigDict(
         env_file='.env',

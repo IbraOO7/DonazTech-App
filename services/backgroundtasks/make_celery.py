@@ -2,7 +2,7 @@ from celery import Celery
 from services.config import configs as config
 from celery.schedules import crontab
 
-REDIS_URL = config.REDIS_URI if "redis" in config.REDIS_URI else "redis://localhost:6379/0"
+REDIS_URL = config.REDIS_URI 
 
 app = Celery("donation_app")
 

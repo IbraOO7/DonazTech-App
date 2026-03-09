@@ -5,8 +5,9 @@ from services.log_config import logger
 
 engine = create_engine(
     configs.POSTGRES_URI, 
-    pool_size=50,
-    max_overflow=100,
+    pool_size=20,
+    max_overflow=50,
+    pool_timeout=30,
     pool_recycle=3600, 
     echo=False
 )

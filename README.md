@@ -28,6 +28,5 @@ Akses dokumentasi API interaktif kami di endpoint `/swagger` pada URL aplikasi y
 1. Clone repositori ini.
 2. Setup environment variables (`.env`):
    ```bash
-   GEMINI_API_KEY=your_key
    MAYAR_API_KEY=your_key
    POSTGRES_URI=your_db_url
